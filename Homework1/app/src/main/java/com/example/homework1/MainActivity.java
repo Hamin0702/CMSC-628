@@ -26,9 +26,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private Sensor gyroscope;
     private Sensor magnetometer;
 
-    private float acclx = 0, accly = 0, acclz = 0, gyrox = 0, gyroy = 0, gyroz = 0;
+    private float acclx = 0, accly = 0, acclz = 0, gyrox = 0, gyroy = 0, gyroz = 0, magx = 0, magy = 0, magz = 0;
     private float now = 0, before = 0, diff = 0;
-    private float prevx = 0, prevy = 0, prevz = 0;
+    private float prevx = 90, prevy = 0, prevz = 0; // Assume we start at phone facing forward !!!!!
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -86,16 +86,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             acclx = event.values[0];
             accly = event.values[1];
             acclz = event.values[2];
-            //Log.d("DEBUG",new Float(acclx).toString());
-            //AcclTask mytask = new AcclTask(acclx, accly, acclz);
-            //myhandler.post(mytask);
-            AcclMagTask mytask = new AcclMagTask(acclx, accly, acclz, 0, 0, 0);
-            myhandler.post(mytask);
         }
 
         if(event.sensor.getType() == Sensor.TYPE_GYROSCOPE){
             now = (float) event.timestamp / (float) 1000000000;
-            //Log.d("timestamp",new Float(now).toString());
             diff = now - before;
             gyrox = event.values[0];
             gyroy = event.values[1];
@@ -106,9 +100,32 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
 
         if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
+            magx = event.values[0];
+            magy = event.values[1];
+            magz = event.values[2];
 
+            float pitch = getPitch(acclx,accly,acclz);
+            float roll = getRoll(acclx,accly,acclz);
+            float yaw = getYaw(pitch,roll,magx,magy,magz);
+
+            AcclMagTask mytask = new AcclMagTask(pitch, roll, yaw);
+            myhandler.post(mytask);
         }
 
+    }
+
+    private float getPitch(float accx, float accy, float accz){
+        return (float) Math.toDegrees(Math.atan2(accy, accz));
+    }
+
+    private float getRoll(float accx, float accy, float accz){
+        return (float) Math.toDegrees(Math.atan2(-accx, Math.sqrt(accy * accy + accz * accz)));
+    }
+
+    private float getYaw(float pitch, float roll, float magx, float magy, float magz){
+        float Mx = (float) (magx*Math.cos(pitch) + magz*Math.sin(pitch));
+        float My = (float) (magx*Math.sin(roll)*Math.sin(pitch) + magy*Math.cos(roll) - magz * Math.sin(roll) * Math.cos(pitch));
+        return (float) Math.toDegrees(Math.atan2(Mx,My));
     }
 
     @Override
@@ -118,7 +135,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private class AcclMagTask implements Runnable{
         float anglePitch, angleRoll, angleYaw;
-        public AcclMagTask(float accx, float accy, float accz, float magx, float magy, float magz){
+        public AcclMagTask(float pitch, float roll, float yaw){
+
+            this.anglePitch = pitch;
+            this.angleRoll = roll;
+            this.angleYaw = yaw;
+
+            /*
             // Find Pitch
             // Special cases when 0, 90, -90, 180, -180
             if(accz == 0){
@@ -136,13 +159,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
             // Four quadrants
             if(accy > 0 && accz < 0){ // 0 to 90
-                this.anglePitch = (float) Math.toDegrees(Math.atan2(Math.abs(accz), accy));
+                this.anglePitch = (float) Math.toDegrees(Math.atan(Math.abs(accz)/accy));
             } else if (accy > 0 && accz > 0) { // 0 to -90
-                this.anglePitch = (float) Math.toDegrees(Math.atan2(-accz, accy));
+                this.anglePitch = (float) Math.toDegrees(Math.atan(-accz/accy));
             } else if (accy < 0 && accz < 0) { // 90 to 180
-                this.anglePitch = 180 - (float) Math.toDegrees(Math.atan2(accz, accy));
+                this.anglePitch = 180 - (float) Math.toDegrees(Math.atan(accz/accy));
             } else if (accy < 0 && accz > 0){ // -90 to -180
-                this.anglePitch = (float) Math.abs(Math.toDegrees(Math.atan2(Math.abs(accz), accy))) - 180;
+                this.anglePitch = (float) Math.abs(Math.toDegrees(Math.atan(Math.abs(accz)/accy))) - 180;
             }
 
             // Find Roll
@@ -162,20 +185,29 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
             // Four quadrants
             if(accy > 0 && accx > 0){ // 0 to 90
-                this.angleRoll = (float) Math.toDegrees(Math.atan2(accx, accy));
+                this.angleRoll = (float) Math.toDegrees(Math.atan(accx/accy));
             } else if (accy > 0 && accx < 0) { // 0 to -90
-                this.angleRoll = (float) Math.toDegrees(Math.atan2(accx, accy));
+                this.angleRoll = (float) Math.toDegrees(Math.atan(accx/accy));
             } else if (accy < 0 && accx > 0) { // 90 to 180
-                this.angleRoll = (float) Math.toDegrees(Math.atan2(accx, accy)) + 180;
+                this.angleRoll = (float) Math.toDegrees(Math.atan(accx/accy)) + 180;
             } else if (accy < 0 && accx < 0){ // -90 to -180
-                this.angleRoll = (float) Math.toDegrees(Math.atan2(accx, accy)) - 180;
+                this.angleRoll = (float) Math.toDegrees(Math.atan(accx/accy)) - 180;
             }
+
+            this.angleRoll = (float) Math.toDegrees(Math.atan2(-accx, Math.sqrt(accy * accy + accz * accz)));
+            this.anglePitch = (float) Math.toDegrees(Math.atan2(accy, accz));
+            float Mx, My;
+            Mx = (float) (magx*Math.cos(this.angleRoll) + magz*Math.sin(this.angleRoll));
+            My = (float) (magx*Math.sin(this.anglePitch)*Math.sin(this.angleRoll) + magy*Math.cos(this.anglePitch) - magz * Math.sin(this.anglePitch) * Math.cos(this.angleRoll));
+            this.angleYaw = (float) Math.toDegrees(Math.atan2(My,Mx));
+             */
         }
 
         @Override
         public void run() {
             pitchTextAcc.setText(new Float(this.anglePitch).toString());
             rollTextAcc.setText(new Float(this.angleRoll).toString());
+            yawTextAcc.setText(new Float(this.angleYaw).toString());
         }
     }
 
@@ -186,9 +218,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             float deltay = (float) Math.toDegrees(gyry * diff);
             float deltaz = (float) Math.toDegrees(gyrz * diff);
 
-            deltax = deltax % 180;
-            deltay = deltay % 180;
-            deltaz = deltaz % 180;
+            deltax = deltax % 360;
+            deltay = deltay % 360;
+            deltaz = deltaz % 360;
 
             // Validating the angles
             float newPitch = deltax + prevx;
